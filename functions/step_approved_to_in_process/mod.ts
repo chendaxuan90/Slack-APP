@@ -1,46 +1,54 @@
 import { SlackFunction } from "deno-slack-sdk/mod.ts";
 import { StepApprovedToInProcess } from "./definition.ts";
-import { DEFAULT_ALLOWED_USER_ID, runTransitionStep } from "../_shared/step_common.ts";
+import { formatJstNow, runTransitionDirect } from "../_shared/step_common.ts";
 
-const ACTION_ID = "jira_step_approved_to_in_process";
+export default SlackFunction(StepApprovedToInProcess, async ({ inputs, client, env }) => {
+  const executedAt = formatJstNow();
 
-export default SlackFunction(StepApprovedToInProcess, async ({ inputs, client }) => {
-  const blocks = [
-    { type: "section", text: { type: "mrkdwn", text: `*Jira:* <${inputs.issueUrl}|${inputs.issueKey}>\nNext: *Approved → In Process*` } },
-    { type: "actions", elements: [{ type: "button", action_id: ACTION_ID, text: { type: "plain_text", text: "Approved ➡ In Process" }, style: "primary", value: inputs.issueKey }] },
-  ];
-
-  const r = await client.chat.postMessage({ channel: inputs.channel_id, blocks, text: `Approved → In Process: ${inputs.issueKey}` });
-  if (!r.ok) return { error: `chat.postMessage failed: ${r.error}` };
-  return { completed: false };
-}).addBlockActionsHandler([ACTION_ID], async ({ action, body, client, env }) => {
-  const clicker = body.user.id;
-  const issueKey = (action.value ?? "").trim();
-
-  if (clicker !== DEFAULT_ALLOWED_USER_ID) {
-    await client.chat.postEphemeral({ channel: body.container.channel_id, user: clicker, text: "Not allowed." });
-    return;
-  }
-
-  const result = await runTransitionStep({
+  const result = await runTransitionDirect({
     env,
-    client,
-    body,
-    clicker,
-    issueKey,
+    issueKey: inputs.issueKey,
+    issueUrl: inputs.issueUrl,
     transitionEnvKey: "JIRA_TRANSITION_APPROVED_TO_IN_PROCESS",
   });
-  if (!result.ok) return;
 
-  await client.chat.update({
-    channel: body.container.channel_id,
-    ts: body.container.message_ts,
-    text: `Updated: ${issueKey}`,
-    blocks: [{ type: "section", text: { type: "mrkdwn", text: `✅ Done by <@${clicker}>\nTransition: *${result.transitionName}*\nStatus: *${result.before}* → *${result.after}*\n<${result.issueUrl}|${issueKey}>` } }],
+  if (!result.ok) {
+    const shownKey = result.issueKey ?? inputs.issueKey;
+    await client.chat.postMessage({
+      channel: inputs.channel_id,
+      text: `⚠️ Failed: ${shownKey}`,
+      blocks: [{
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text:
+            `⚠️ *Failed*\n` +
+            `*Issue:* ${inputs.issueUrl ? `<${inputs.issueUrl}|${shownKey}>` : shownKey}\n` +
+            `*When:* ${executedAt}\n` +
+            `*Status Before:* *${result.statusBefore ?? "Unknown"}*\n` +
+            `*Error:* \`${result.error}\``,
+        },
+      }],
+    });
+    return { error: result.error };
+  }
+
+  await client.chat.postMessage({
+    channel: inputs.channel_id,
+    text: `✅ Done: ${result.issueKey}`,
+    blocks: [{
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `✅ *Done*\n` +
+          `*Issue:* <${result.issueUrl}|${result.issueKey}>\n` +
+          `*Status Before:* *${result.statusBefore}*\n` +
+          `*Status Now:* *${result.statusNow}*\n` +
+          `*When:* ${executedAt}`,
+      },
+    }],
   });
 
-  await client.functions.completeSuccess({
-    function_execution_id: body.function_data.execution_id,
-    outputs: { issueKey, status: result.after },
-  });
+  return { outputs: { issueKey: result.issueKey, status: result.statusNow } };
 });
