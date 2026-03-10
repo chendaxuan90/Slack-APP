@@ -7,15 +7,33 @@ export const StepInReviewToDone = DefineFunction({
   source_file: "functions/step_in_review_to_done/mod.ts",
   input_parameters: {
     properties: {
-      interactivity: { type: Schema.slack.types.interactivity },
-      channel_id: { type: Schema.slack.types.channel_id },
-      issueKey: { type: Schema.types.string },
-      issueUrl: { type: Schema.types.string },
+      interactivity: {
+        type: Schema.slack.types.interactivity,
+      },
+      channel_id: {
+        type: Schema.slack.types.channel_id,
+      },
+      thread_id: {
+        type: Schema.types.string,
+      },
+      issueKey: {
+        type: Schema.types.string,
+      },
+      issueUrl: {
+        type: Schema.types.string,
+      },
     },
-    required: ["interactivity", "channel_id", "issueKey", "issueUrl"],
+    required: ["interactivity", "channel_id", "thread_id", "issueKey", "issueUrl"],
   },
   output_parameters: {
-    properties: { issueKey: { type: Schema.types.string }, status: { type: Schema.types.string } },
+    properties: {
+      issueKey: {
+        type: Schema.types.string,
+      },
+      status: {
+        type: Schema.types.string,
+      },
+    },
     required: ["issueKey", "status"],
   },
 });

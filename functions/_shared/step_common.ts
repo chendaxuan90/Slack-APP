@@ -16,17 +16,14 @@ export function formatJstNow(date = new Date()): string {
 
 export function extractIssueKey(input: { issueKey?: string; issueUrl?: string }): string {
   const { issueKey, issueUrl } = input;
-
   if (issueUrl) {
     const m = issueUrl.match(/\/browse\/([A-Z][A-Z0-9]+-\d+)/);
     if (m?.[1]) return m[1];
   }
-
   if (issueKey) {
     const m = issueKey.match(/([A-Z][A-Z0-9]+-\d+)/);
     if (m?.[1]) return m[1];
   }
-
   return (issueKey ?? "").trim();
 }
 
@@ -42,8 +39,8 @@ export async function getStatusWithRetry(args: {
 }) {
   const retries = args.retries ?? 3;
   const intervalMs = args.intervalMs ?? 600;
-
   let lastErr: unknown;
+
   for (let i = 0; i < retries; i++) {
     try {
       return await getIssueStatusName(args.env, args.issueKey);
@@ -52,10 +49,13 @@ export async function getStatusWithRetry(args: {
       if (i < retries - 1) await sleep(intervalMs);
     }
   }
+
   throw lastErr;
 }
 
-/** transition 後の反映遅延対策：before と違う状態になるまで待つ */
+/**
+ * transition 後の反映遅延対策：before と違う状態になるまで待つ
+ */
 export async function waitForStatusChange(args: {
   env: Record<string, string>;
   issueKey: string;
@@ -65,8 +65,8 @@ export async function waitForStatusChange(args: {
 }) {
   const timeoutMs = args.timeoutMs ?? 20000;
   const intervalMs = args.intervalMs ?? 1200;
-
   const start = Date.now();
+
   while (Date.now() - start < timeoutMs) {
     try {
       const cur = await getIssueStatusName(args.env, args.issueKey);
@@ -106,7 +106,12 @@ export async function runTransitionDirect(args: {
 
   let statusBefore = "Unknown";
   try {
-    statusBefore = await getStatusWithRetry({ env: args.env, issueKey, retries: 3, intervalMs: 600 });
+    statusBefore = await getStatusWithRetry({
+      env: args.env,
+      issueKey,
+      retries: 3,
+      intervalMs: 600,
+    });
   } catch {
     statusBefore = "Unknown";
   }
@@ -142,4 +147,19 @@ export async function runTransitionDirect(args: {
     statusBefore,
     statusNow,
   };
+}
+
+export async function postThreadReply(args: {
+  client: any;
+  channelId: string;
+  threadId: string;
+  text: string;
+  blocks?: any[];
+}) {
+  return await args.client.chat.postMessage({
+    channel: args.channelId,
+    thread_ts: args.threadId,
+    text: args.text,
+    blocks: args.blocks,
+  });
 }
